@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Орбита Максима</title>
+<style>
+/* Layout: one full-screen stage, a live spiral galaxy on canvas behind, six slides that fade over it, planets drift in from the side. */
+:root{
+  --space:#05060f;
+  --ink:#f3efe6;
+  --ink-dim:#b8b6c4;
+  --gold:#f2c879;
+  --violet:#8f86d9;
+  --font-display:'Cormorant Garamond','Times New Roman',serif;
+  --font-ui:'Jost','Helvetica Neue',Arial,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--space);color:var(--ink);font-family:var(--font-display);overflow:hidden;-webkit-tap-highlight-color:transparent;user-select:none}
+#sky{position:fixed;inset:0;width:100%;height:100%;display:block}
+.stage{position:fixed;inset:0;padding-inline:20px}
+.slide{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.4rem;padding-inline:20px;text-align:center;opacity:0;visibility:hidden;transition:opacity 1.2s ease,visibility 0s 1.2s}
+.slide.on{opacity:1;visibility:visible;transition:opacity 1.2s ease .2s,visibility 0s}
+.txt{max-width:30rem;position:relative;z-index:2}
+.txt p{margin:0 0 .7em;font-size:clamp(1.25rem,4.6vw,1.9rem);line-height:1.35;font-weight:500;text-wrap:balance;text-shadow:0 0 24px var(--space),0 0 8px var(--space)}
+.txt p.big{font-size:clamp(1.9rem,7.5vw,3.2rem);font-style:italic;line-height:1.15}
+.txt p.small{font-family:var(--font-ui);font-weight:300;font-size:.8rem;letter-spacing:.28em;text-transform:uppercase;color:var(--ink-dim)}
+.slide .txt>*{opacity:0;transform:translateY(14px);transition:opacity 1.2s ease,transform 1.2s ease}
+.slide.on .txt>*{opacity:1;transform:none}
+.slide.on .txt>*:nth-child(1){transition-delay:.7s}
+.slide.on .txt>*:nth-child(2){transition-delay:1.7s}
+.slide.on .txt>*:nth-child(3){transition-delay:2.7s}
+
+/* planets */
+.planet{position:absolute;border-radius:50%;pointer-events:none;opacity:0;transition:opacity 1.6s ease .3s,transform 2.2s cubic-bezier(.2,.7,.2,1) .2s;animation:bob 9s ease-in-out infinite}
+.slide.on .planet{opacity:1;transform:translate(0,0)!important}
+@keyframes bob{50%{margin-top:-12px}}
+.moon{width:min(78vw,460px);aspect-ratio:1;right:-22%;top:-8%;transform:translate(12%,-6%);
+  background:
+   radial-gradient(circle at 30% 35%,rgba(70,70,76,.55) 0 5%,transparent 6%),
+   radial-gradient(circle at 62% 28%,rgba(70,70,76,.5) 0 8%,transparent 9%),
+   radial-gradient(circle at 55% 62%,rgba(60,60,66,.55) 0 11%,transparent 12%),
+   radial-gradient(circle at 25% 68%,rgba(70,70,76,.45) 0 6%,transparent 7%),
+   radial-gradient(circle at 78% 58%,rgba(70,70,76,.45) 0 5%,transparent 6%),
+   radial-gradient(circle at 32% 30%,#ecebea,#a8a9ad 55%,#4c4d52 100%);
+  box-shadow:0 0 90px rgba(200,205,255,.25),inset -30px -20px 70px rgba(0,0,0,.55)}
+.saturn{width:min(52vw,300px);aspect-ratio:1;left:-8%;bottom:6%;transform:translate(-20%,10%);
+  background:repeating-linear-gradient(172deg,#e8c982 0 9%,#caa266 9% 16%,#f1dba6 16% 24%,#b98f55 24% 28%);
+  box-shadow:inset -26px -18px 50px rgba(0,0,0,.6),0 0 60px rgba(242,200,121,.18)}
+.saturn::after{content:"";position:absolute;left:-42%;right:-42%;top:34%;bottom:34%;border-radius:50%;
+  border:14px solid rgba(232,208,150,.75);border-width:12px 22px;transform:rotate(-16deg);box-shadow:0 0 18px rgba(242,200,121,.3)}
+.jupiter{width:min(62vw,360px);aspect-ratio:1;right:-14%;top:2%;transform:translate(20%,-10%);
+  background:repeating-linear-gradient(8deg,#e7d0b0 0 7%,#b87b4b 7% 12%,#f3e6cf 12% 20%,#9c5f3a 20% 24%,#d9b48a 24% 33%);
+  box-shadow:inset -34px -22px 60px rgba(0,0,0,.6),0 0 70px rgba(230,170,120,.18)}
+.jupiter::after{content:"";position:absolute;width:20%;height:11%;left:56%;top:62%;border-radius:50%;background:radial-gradient(#c0583a,#8e3c26);box-shadow:0 0 14px rgba(0,0,0,.35)}
+.mars{width:min(54vw,320px);aspect-ratio:1;left:50%;margin-left:calc(min(54vw,320px)/-2);bottom:-10%;transform:translate(0,24%);
+  background:radial-gradient(circle at 30% 28%,#f09a6a,#c8582f 55%,#6b2a1a 100%);
+  box-shadow:inset -28px -20px 60px rgba(0,0,0,.55),0 0 70px rgba(230,110,70,.25)}
+.mars::before{content:"";position:absolute;inset:0;border-radius:50%;
+  background:radial-gradient(circle at 60% 40%,rgba(90,35,20,.4) 0 12%,transparent 13%),radial-gradient(circle at 35% 62%,rgba(90,35,20,.35) 0 9%,transparent 10%)}
+
+
+.venus{width:min(46vw,260px);aspect-ratio:1;right:-6%;bottom:8%;transform:translate(20%,10%);
+  background:radial-gradient(circle at 32% 30%,#fff3d6,#e8c78a 45%,#a8763d 100%);
+  box-shadow:inset -24px -16px 50px rgba(60,25,0,.55),0 0 60px rgba(255,214,150,.3)}
+.venus::before{content:"";position:absolute;inset:0;border-radius:50%;background:repeating-radial-gradient(ellipse at 60% 40%,rgba(255,255,255,.14) 0 4%,transparent 4% 9%)}
+.neptune{width:min(50vw,290px);aspect-ratio:1;left:-10%;top:4%;transform:translate(-20%,-10%);
+  background:radial-gradient(circle at 32% 30%,#8fb4ff,#3b63d6 50%,#12246b 100%);
+  box-shadow:inset -26px -18px 55px rgba(0,0,20,.6),0 0 70px rgba(90,130,255,.3)}
+.neptune::before{content:"";position:absolute;left:10%;right:10%;top:44%;height:8%;border-radius:50%;background:rgba(255,255,255,.18);filter:blur(5px)}
+.earth{width:min(58vw,340px);aspect-ratio:1;left:50%;margin-left:calc(min(58vw,340px)/-2);bottom:-14%;transform:translate(0,24%);
+  background:radial-gradient(ellipse at 38% 40%,#3f9b5b 0 14%,transparent 15%),radial-gradient(ellipse at 66% 62%,#4aa66a 0 12%,transparent 13%),radial-gradient(ellipse at 30% 70%,#3f9b5b 0 8%,transparent 9%),radial-gradient(circle at 32% 28%,#7cc3ff,#2a69c8 55%,#0b2457 100%);
+  box-shadow:inset -28px -20px 60px rgba(0,0,15,.6),0 0 80px rgba(110,170,255,.35)}
+.mars.big{bottom:-6%}
+
+/* wish */
+.count{font-family:var(--font-ui);font-weight:200;font-size:clamp(3.5rem,18vw,6rem);line-height:1;color:var(--gold);text-shadow:0 0 30px rgba(242,200,121,.6);min-height:1em;position:relative;z-index:2}
+.wishstar{position:fixed;left:0;top:0;width:260px;height:3px;border-radius:3px;transform-origin:0 50%;opacity:0;pointer-events:none;z-index:4;background:linear-gradient(90deg,#fff,rgba(255,230,170,.6) 25%,rgba(255,230,170,0));box-shadow:0 0 14px 3px rgba(255,235,190,.7)}
+#w2:not([hidden]){animation:rise 1.8s ease both}
+#w2>*{opacity:1!important;transform:none!important;transition:none!important}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+/* constellation */
+.const{width:min(64vw,280px);height:auto;overflow:visible}
+.const polyline{fill:none;stroke:var(--ink);stroke-width:.7;stroke-dasharray:260;stroke-dashoffset:260;opacity:.8}
+.slide.on .const polyline{animation:draw 4s ease 1s forwards}
+.const circle{fill:var(--gold);opacity:0;filter:drop-shadow(0 0 3px var(--gold))}
+.slide.on .const circle{animation:pop .8s ease forwards}
+.const circle:nth-child(2){animation-delay:.8s}.const circle:nth-child(3){animation-delay:1.8s}.const circle:nth-child(4){animation-delay:2.8s}.const circle:nth-child(5){animation-delay:3.6s}.const circle:nth-child(6){animation-delay:4.4s}
+@keyframes draw{to{stroke-dashoffset:0}}
+@keyframes pop{from{opacity:0;r:0}to{opacity:1}}
+
+/* happy birthday rings */
+.rings{position:relative;width:min(88vw,520px);aspect-ratio:2/1;display:grid;place-items:center}
+.rings i{position:absolute;inset:0;border:1px solid rgba(243,239,230,.75);border-radius:50%;animation:spin 16s linear infinite}
+.rings i:nth-child(2){inset:9% 4%;transform:rotate(-8deg);animation-duration:22s;animation-direction:reverse;border-color:rgba(242,200,121,.7)}
+.rings i::after{content:"✦";position:absolute;left:50%;top:-.6em;font-size:1.4rem;color:var(--gold);text-shadow:0 0 12px var(--gold)}
+@keyframes spin{to{rotate:360deg}}
+.rings h1{margin:0;font-weight:500;font-style:italic;font-size:clamp(2.4rem,10vw,4.4rem);text-shadow:0 0 30px rgba(143,134,217,.7);z-index:1}
+.age{font-family:var(--font-ui);font-weight:200;font-size:clamp(4rem,22vw,9rem);line-height:1;letter-spacing:.04em;background:linear-gradient(180deg,var(--ink),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent;margin:0}
+
+/* player + buttons */
+.player{display:flex;align-items:center;gap:14px;font-family:var(--font-ui)}
+.pbtn{width:44px;height:44px;border-radius:50%;border:1px solid rgba(243,239,230,.6);background:rgba(5,6,15,.35);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0}
+.pbtn svg{width:16px;height:16px;fill:currentColor}
+.bars{display:flex;align-items:center;gap:3px;height:34px}
+.bars b{width:2px;background:var(--ink);opacity:.8;border-radius:2px;height:var(--h);transition:height .3s}
+.playing .bars b{animation:eq 1s ease-in-out infinite;animation-delay:calc(var(--i)*-.09s)}
+@keyframes eq{50%{height:calc(var(--h)*.3)}}
+.btn{font-family:var(--font-ui);font-weight:400;font-size:.8rem;letter-spacing:.3em;text-transform:uppercase;color:var(--ink);background:rgba(243,239,230,.12);border:1px solid rgba(243,239,230,.35);border-radius:999px;padding:.95em 2.6em;cursor:pointer;backdrop-filter:blur(6px)}
+.btn:hover{background:rgba(243,239,230,.22)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+.hint{position:fixed;left:0;right:0;bottom:calc(18px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;align-items:center;gap:10px;z-index:5;pointer-events:none}
+.dots{display:flex;gap:8px}
+.dots span{width:5px;height:5px;border-radius:50%;background:var(--ink);opacity:.25;transition:.6s}
+.dots span.on{opacity:1;background:var(--gold);transform:scale(1.3)}
+.tap{font-family:var(--font-ui);font-weight:300;font-size:.68rem;letter-spacing:.3em;text-transform:uppercase;color:var(--ink-dim);animation:fade 3s ease-in-out infinite}
+@keyframes fade{50%{opacity:.3}}
+#edit{display:none;position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:12px;z-index:9;font:12px var(--font-ui);color:var(--ink-dim)}
+#edit.show{display:block}
+@media (prefers-reduced-motion:reduce){.planet,.rings i,.tap,.playing .bars b{animation:none}.slide,.slide .txt>*{transition-duration:.01s;transition-delay:0s!important}}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;1,500&family=Jost:wght@200;300;400&display=swap">
+
+</head>
+<body>
+<canvas id="sky"></canvas>
+<audio id="music" loop preload="auto"></audio>
+<label id="edit">Свой трек: <input type="file" id="pick" accept="audio/*"></label>
+
+<main class="stage" id="stage">
+  <!-- 0 -->
+  <section class="slide on">
+    <div class="txt">
+      <p class="big">Новая орбита для тебя…</p>
+      <p>Максим, сегодня твой день.</p>
+    </div>
+    <div class="player" id="player">
+      <button class="pbtn" id="pp" aria-label="Играть или пауза"><svg viewBox="0 0 16 16" id="ppi"><path d="M3 1.5v13l11-6.5z"/></svg></button>
+      <div class="bars" id="bars"></div>
+    </div>
+    <button class="btn" id="start">Старт</button>
+  </section>
+  <!-- 1 Луна, М -->
+  <section class="slide">
+    <div class="planet moon"></div>
+    <svg class="const" viewBox="0 0 100 100" aria-hidden="true">
+      <polyline points="10,90 30,15 50,60 70,15 90,90"/>
+      <circle cx="10" cy="90" r="2.2"/><circle cx="30" cy="15" r="2.6"/><circle cx="50" cy="60" r="2"/><circle cx="70" cy="15" r="2.6"/><circle cx="90" cy="90" r="2.2"/>
+    </svg>
+    <div class="txt">
+      <p>У каждого человека есть своё созвездие.</p>
+      <p>Твоё похоже на букву М.</p>
+      <p class="small">созвездие Максима</p>
+    </div>
+  </section>
+  <!-- 2 Весы -->
+  <section class="slide">
+    <svg class="const" viewBox="0 0 100 100" aria-hidden="true">
+      <polyline points="28,52 60,18 90,48 58,80 28,52 40,94"/>
+      <circle cx="28" cy="52" r="2.6"/><circle cx="60" cy="18" r="2.8"/><circle cx="90" cy="48" r="2.2"/><circle cx="58" cy="80" r="2"/><circle cx="40" cy="94" r="1.8"/>
+    </svg>
+    <div class="txt">
+      <p>А ещё ты Весы.</p>
+      <p>Знак, который ищет баланс, красоту и справедливость. И почти всегда находит.</p>
+      <p class="small">главные звезды Весов: Зубенельгенуби и Зубенешамали</p>
+    </div>
+  </section>
+  <!-- 3 С днём рождения -->
+  <section class="slide">
+    <div class="rings"><i></i><i></i><h1>С днём рождения!</h1></div>
+    <p class="age">25</p>
+  </section>
+  <!-- 4 Сатурн -->
+  <section class="slide">
+    <div class="planet saturn"></div>
+    <div class="txt">
+      <p>Двадцать пять лет это четверть века.</p>
+      <p>Сатурн за это время обошёл Солнце меньше одного раза. Ты успел гораздо больше.</p>
+      <p class="small">год на Сатурне длится 29 лет</p>
+    </div>
+  </section>
+  <!-- 5 Венера -->
+  <section class="slide">
+    <div class="planet venus"></div>
+    <div class="txt">
+      <p>Весами управляет Венера, планета любви и красоты.</p>
+      <p>Желаю, чтобы в твоей жизни всегда была гармония: в делах, дома и в сердце.</p>
+      <p class="small">на Венере день длиннее года</p>
+    </div>
+  </section>
+  <!-- 6 Юпитер -->
+  <section class="slide">
+    <div class="planet jupiter"></div>
+    <div class="txt">
+      <p>Желаю тебе масштаба Юпитера: больших планов, больших побед и людей, которые рядом по-настоящему.</p>
+      <p>По юпитерианскому календарю тебе чуть больше двух лет. Всё только начинается.</p>
+    </div>
+  </section>
+  <!-- 7 Звезда и желание -->
+  <section class="slide" id="wishslide">
+    <div class="count" id="count">5</div>
+    <div class="txt" id="w1">
+      <p>Смотри на небо.</p>
+      <p>Через пять секунд упадёт звезда. Успей загадать желание.</p>
+    </div>
+    <div class="txt" id="w2" hidden>
+      <p class="big">Загадал?</p>
+      <p>Тогда оно точно сбудется. Только никому не говори.</p>
+    </div>
+  </section>
+  <!-- 8 Нептун -->
+  <section class="slide">
+    <div class="planet neptune"></div>
+    <div class="txt">
+      <p>Желаю спокойной глубины Нептуна: уверенности, когда вокруг шумно.</p>
+      <p>Времени и сил на всё, что любишь, и людей, рядом с которыми можно быть собой.</p>
+      <p class="small">год на Нептуне длится 165 земных лет</p>
+    </div>
+  </section>
+  <!-- 9 Марс -->
+  <section class="slide">
+    <div class="planet mars big"></div>
+    <div class="txt">
+      <p>Ты не первым полетел на Марс.</p>
+      <p class="big">Зато первым увидел такую открытку от меня.</p>
+      <p class="small">эксклюзив, только для Максима</p>
+    </div>
+  </section>
+  <!-- 10 Финал -->
+  <section class="slide">
+    <div class="planet earth"></div>
+    <div class="txt">
+      <p>Вот и всё.</p>
+      <p>Пусть этот год будет ярким, а самые смелые цели окажутся ближе, чем кажется.</p>
+      <p class="big">С днём рождения, Максим!</p>
+    </div>
+    <button class="btn" id="again" style="position:relative;z-index:3">Сначала</button>
+  </section>
+</main>
+<div class="wishstar" id="wishstar"></div>
+
+<div class="hint"><div class="dots" id="dots"></div><div class="tap" id="tap" hidden>коснись, чтобы лететь дальше</div></div>
+
+<script>
+(function(){
+'use strict';
+try{
+// Вставьте свою музыку сюда: путь к файлу или data:-ссылка. Пока пусто, плеер просто молчит.
+const MUSIC_SRC = "song.mp3";
+
+const slides=[...document.querySelectorAll('.slide')];
+const dotsEl=document.getElementById('dots');
+slides.forEach(()=>dotsEl.appendChild(document.createElement('span')));
+const dots=[...dotsEl.children];
+const tap=document.getElementById('tap');
+let cur=0,lock=false;
+const WISH=7;let wishDone=false,wTimers=[];
+function wishReset(){wTimers.forEach(clearTimeout);wTimers=[];wishDone=false;
+  document.getElementById('w1').hidden=false;document.getElementById('w2').hidden=true;document.getElementById('count').textContent='5'}
+function wishStart(){
+  wishReset();const cnt=document.getElementById('count');
+  for(let i=1;i<=5;i++)wTimers.push(setTimeout(()=>{cnt.textContent=String(5-i)},i*1000));
+  wTimers.push(setTimeout(()=>{cnt.textContent='';fallStar()},5000));
+  wTimers.push(setTimeout(()=>{document.getElementById('w1').hidden=true;document.getElementById('w2').hidden=false;wishDone=true},7600));
+}
+function fallStar(){
+  const el=document.getElementById('wishstar');
+  const x0=W*.88,y0=H*.08,x1=W*.12,y1=y0+(x0-x1)*.5;
+  const deg=Math.atan2(y1-y0,x1-x0)*180/Math.PI+180;
+  el.animate([
+    {transform:`translate(${x0}px,${y0}px) rotate(${deg}deg)`,opacity:0},
+    {opacity:1,offset:.12},
+    {transform:`translate(${x1}px,${y1}px) rotate(${deg}deg)`,opacity:0}
+  ],{duration:2200,easing:'cubic-bezier(.4,0,.8,.6)',fill:'none'});
+}
+function next(){if(cur===WISH&&!wishDone)return;if(cur>0&&cur<slides.length-1)go(cur+1)}
+function go(n){
+  if(lock||n===cur||n<0||n>=slides.length)return;
+  lock=true;setTimeout(()=>lock=false,1600);
+  if(cur===WISH)wishReset();
+  slides[cur].classList.remove('on');cur=n;slides[cur].classList.add('on');
+  dots.forEach((d,i)=>d.classList.toggle('on',i===cur));
+  tap.hidden=cur===0||cur===slides.length-1||cur===WISH;
+  camTarget=CAMS[cur];warp=Math.max(warp,cur===WISH?.25:1);
+  if(cur===WISH)wishStart();
+}
+dots[0].classList.add('on');
+
+// music
+const audio=document.getElementById('music'),pp=document.getElementById('pp'),ppi=document.getElementById('ppi'),player=document.getElementById('player');
+const bars=document.getElementById('bars');
+for(let i=0;i<22;i++){const b=document.createElement('b');b.style.setProperty('--i',i);b.style.setProperty('--h',(6+Math.abs(Math.sin(i*1.7))*24)+'px');bars.appendChild(b)}
+if(MUSIC_SRC)audio.src=MUSIC_SRC;
+const PLAY='<path d="M3 1.5v13l11-6.5z"/>',PAUSE='<path d="M2.5 1.5h4v13h-4zM9.5 1.5h4v13h-4z"/>';
+function sync(){const on=!audio.paused;player.classList.toggle('playing',on);ppi.innerHTML=on?PAUSE:PLAY}
+function toggle(){if(!audio.src)return;audio.paused?audio.play().catch(()=>{}):audio.pause();setTimeout(sync,60)}
+pp.addEventListener('click',e=>{e.stopPropagation();toggle()});
+audio.addEventListener('play',sync);audio.addEventListener('pause',sync);
+document.getElementById('start').addEventListener('click',e=>{e.stopPropagation();if(audio.src&&audio.paused)audio.play().catch(()=>{});go(1)});
+document.getElementById('again').addEventListener('click',e=>{e.stopPropagation();go(0)});
+if(location.hash==='#edit'){document.getElementById('edit').classList.add('show')}
+document.getElementById('pick').addEventListener('change',e=>{const f=e.target.files[0];if(f){audio.src=URL.createObjectURL(f);audio.play().catch(()=>{});sync()}});
+
+// navigation
+document.getElementById('stage').addEventListener('click',next);
+addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key===' '||e.key==='Enter'){if(cur>0)next();else if(e.key!==' ')go(1)}if(e.key==='ArrowLeft')go(cur-1)});
+let sx=null;addEventListener('touchstart',e=>sx=e.touches[0].clientX,{passive:true});
+addEventListener('touchend',e=>{if(sx===null)return;const dx=e.changedTouches[0].clientX-sx;sx=null;if(dx>60)go(cur-1)},{passive:true});
+
+// galaxy
+const cv=document.getElementById('sky'),ctx=cv.getContext('2d');
+let W,H,DPR;
+function size(){DPR=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0)}
+addEventListener('resize',size);size();
+const R=1,N=3600,ARMS=3,gal=[];
+function hue(t){ // 0 core .. 1 rim
+  const c=[[255,226,170],[255,176,120],[170,150,255],[110,150,255]];
+  const k=Math.min(t,.999)*3,i=Math.floor(k),f=k-i,a=c[i],b=c[i+1];
+  return a.map((v,j)=>Math.round(v+(b[j]-v)*f));
+}
+for(let i=0;i<N;i++){
+  const t=Math.pow(Math.random(),1.6),r=t*R,arm=(i%ARMS)*(Math.PI*2/ARMS);
+  const ang=arm+r*5.2+(Math.random()-.5)*(.25+.9*(1-t)*.6)+(Math.random()-.5)*.15;
+  const sp=(Math.random()-.5)*.09*(1-t*.5);
+  const [cr,cg,cb]=hue(t);
+  gal.push({x:Math.cos(ang)*r+sp,y:Math.sin(ang)*r+sp,r:Math.random()<.04?1.8:Math.random()*.9+.4,a:Math.random()*.6+.3,col:`${cr},${cg},${cb}`,tw:Math.random()*6.28});
+}
+const bg=[];for(let i=0;i<420;i++)bg.push({x:Math.random(),y:Math.random(),r:Math.random()*1.1+.2,z:Math.random()*.8+.2,tw:Math.random()*6.28,sp:.6+Math.random()*1.6});
+// камера по слайдам: смещение центра (доли экрана), масштаб, наклон
+const CAMS=[{x:.5,y:.55,s:1,t:.42},{x:.2,y:.8,s:.8,t:.38},{x:.85,y:.1,s:.9,t:.45},{x:.5,y:.5,s:1.35,t:.5},{x:.85,y:.3,s:.9,t:.3},{x:.2,y:.3,s:1,t:.4},{x:.15,y:.75,s:1.1,t:.55},{x:.5,y:.95,s:1,t:.35},{x:.85,y:.75,s:1,t:.45},{x:.5,y:.2,s:1.2,t:.4},{x:.5,y:.25,s:1.25,t:.4}];
+let cam={...CAMS[0]},camTarget=CAMS[0],px=0,py=0,tx=0,ty=0;
+addEventListener('pointermove',e=>{tx=e.clientX/W-.5;ty=e.clientY/H-.5});
+addEventListener('deviceorientation',e=>{if(e.gamma!=null){tx=Math.max(-.5,Math.min(.5,e.gamma/60));ty=Math.max(-.5,Math.min(.5,(e.beta-45)/90))}});
+const S3=[],SN=1100;let warp=0;
+function mk(o,far){o.x=(Math.random()*2-1)*1.7;o.y=(Math.random()*2-1)*1.7;o.z=far?1:Math.random();o.pz=o.z;o.h=Math.random()}
+for(let i=0;i<SN;i++){const o={};mk(o,false);S3.push(o)}
+const shoot=[];let nextShoot=3;
+const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+let last=performance.now(),time=0;
+function frame(now){
+  const dt=Math.min((now-last)/1000,.05);last=now;time+=dt;
+  for(const k of['x','y','s','t'])cam[k]+=(camTarget[k]-cam[k])*Math.min(1,dt*1.1);
+  px+=(tx-px)*dt*2;py+=(ty-py)*dt*2;
+  ctx.globalCompositeOperation='source-over';
+  ctx.fillStyle='#05060f';ctx.fillRect(0,0,W,H);
+  const m=Math.min(W,H),rad=Math.max(m,Math.min(W,H)*.9)*.62*cam.s*(1+warp*.12)*(W<H?1.25:1);
+  const cx=cam.x*W-px*30,cy=cam.y*H-py*30;
+  // туманность
+  const g=ctx.createRadialGradient(cx,cy,0,cx,cy,rad*1.15);
+  g.addColorStop(0,'rgba(255,200,140,.30)');g.addColorStop(.25,'rgba(150,110,220,.14)');g.addColorStop(.6,'rgba(60,80,190,.07)');g.addColorStop(1,'rgba(5,6,15,0)');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  // фон
+  ctx.globalCompositeOperation='lighter';
+  for(const s of bg){const a=(.35+.65*(.5+.5*Math.sin(time*s.sp+s.tw)))*s.z;ctx.fillStyle=`rgba(255,255,255,${a})`;
+    const x=(s.x*W-px*40*s.z+W)%W,y=(s.y*H-py*40*s.z+H)%H;ctx.fillRect(x,y,s.r,s.r)}
+  // 3D-звёзды: летим сквозь поле
+  {
+    const speed=(reduce?.015:.075)+warp*1.5;warp*=Math.exp(-dt*1.25);
+    const f=Math.max(W,H)*.5,ox=W/2-px*70,oy=H/2-py*70;
+    ctx.lineCap='round';
+    for(const o of S3){
+      o.pz=o.z;o.z-=speed*dt;
+      if(o.z<=.03){mk(o,true);continue}
+      const sx=ox+o.x/o.z*f,sy=oy+o.y/o.z*f;
+      if(sx<-30||sx>W+30||sy<-30||sy>H+30){mk(o,true);continue}
+      const near=1-o.z,a=Math.min(1,.3+near*1.6),r=.5+near*near*2.8;
+      const col=o.h<.12?'255,214,150':o.h<.3?'170,190,255':'255,255,255';
+      const px0=ox+o.x/o.pz*f,py0=oy+o.y/o.pz*f;
+      const len=Math.hypot(sx-px0,sy-py0);
+      if(len>1.6){ctx.strokeStyle=`rgba(${col},${a})`;ctx.lineWidth=r;ctx.beginPath();ctx.moveTo(px0,py0);ctx.lineTo(sx,sy);ctx.stroke()}
+      else{ctx.fillStyle=`rgba(${col},${a})`;ctx.beginPath();ctx.arc(sx,sy,r*.6,0,7);ctx.fill()}
+    }
+  }
+  // галактика
+  const ang=reduce?0:time*.05,ca=Math.cos(ang),sa=Math.sin(ang),tilt=cam.t,tr=-.5+px*.25;
+  const ct=Math.cos(tr),st=Math.sin(tr);
+  for(const s of gal){
+    const rx=s.x*ca-s.y*sa,ry=(s.x*sa+s.y*ca)*tilt;
+    const x=cx+(rx*ct-ry*st)*rad,y=cy+(rx*st+ry*ct)*rad;
+    if(x<-4||y<-4||x>W+4||y>H+4)continue;
+    const a=s.a*(.75+.25*Math.sin(time*1.4+s.tw));
+    ctx.fillStyle=`rgba(${s.col},${a})`;ctx.fillRect(x,y,s.r*1.2,s.r*1.2);
+  }
+  // ядро
+  const cg=ctx.createRadialGradient(cx,cy,0,cx,cy,rad*.16);
+  cg.addColorStop(0,'rgba(255,240,210,.85)');cg.addColorStop(1,'rgba(255,200,140,0)');
+  ctx.fillStyle=cg;ctx.beginPath();ctx.arc(cx,cy,rad*.16,0,7);ctx.fill();
+  // падающие звёзды
+  if(!reduce){nextShoot-=dt;if(nextShoot<0){nextShoot=4+Math.random()*6;shoot.push({x:Math.random()*W*.8+W*.2,y:Math.random()*H*.4,vx:-(420+Math.random()*300),vy:260+Math.random()*160,l:0})}}
+  for(let i=shoot.length-1;i>=0;i--){const s=shoot[i];s.l+=dt;s.x+=s.vx*dt;s.y+=s.vy*dt;const a=Math.max(0,1-s.l/1.1);
+    ctx.strokeStyle=`rgba(255,255,255,${a})`;ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(s.x,s.y);ctx.lineTo(s.x-s.vx*.12,s.y-s.vy*.12);ctx.stroke();if(s.l>1.1)shoot.splice(i,1)}
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+}catch(err){console.error(err)}
+})();
+</script>
+
+</body>
+</html>
